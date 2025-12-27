@@ -1,0 +1,110 @@
+{
+    "name": "Inbox Health - Daily Maintenance",
+    "nodes": [
+      {
+        "id": "cron_daily",
+        "name": "Daily Cron",
+        "type": "n8n-nodes-base.cron",
+        "typeVersion": 1,
+        "position": [200, 300],
+        "parameters": {
+          "triggerTimes": {
+            "item": [
+              {
+                "mode": "everyDay",
+                "hour": 2,
+                "minute": 30
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "calc_health",
+        "name": "Calculate Health Score",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [450, 300],
+        "credentials": {
+          "postgres": {
+            "id": "SUPABASE_POSTGRES_CREDENTIAL_ID",
+            "name": "Supabase Postgres"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "update inboxes\nset health_score = greatest(\n  0,\n  least(\n    100,\n    100 - (failed_count * 10) + (replies_count * 5)\n  )\n);"
+        }
+      },
+      {
+        "id": "auto_resume",
+        "name": "Auto Resume Inboxes",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [700, 300],
+        "credentials": {
+          "postgres": {
+            "id": "SUPABASE_POSTGRES_CREDENTIAL_ID",
+            "name": "Supabase Postgres"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "update inboxes\nset status = 'active',\n    paused_reason = null\nwhere status = 'paused'\nand hard_paused = false\nand health_score >= 70;"
+        }
+      },
+      {
+        "id": "log_event",
+        "name": "Log System Event",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [950, 300],
+        "credentials": {
+          "postgres": {
+            "id": "SUPABASE_POSTGRES_CREDENTIAL_ID",
+            "name": "Supabase Postgres"
+          }
+        },
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "insert into system_events (type, entity, message)\nvalues ('INBOX_RESUMED', 'inbox', 'Inbox auto-resume check executed');"
+        }
+      }
+    ],
+    "connections": {
+      "Daily Cron": {
+        "main": [
+          [
+            {
+              "node": "Calculate Health Score",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Calculate Health Score": {
+        "main": [
+          [
+            {
+              "node": "Auto Resume Inboxes",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Auto Resume Inboxes": {
+        "main": [
+          [
+            {
+              "node": "Log System Event",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+  
