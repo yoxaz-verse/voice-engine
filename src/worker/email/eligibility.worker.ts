@@ -1,5 +1,5 @@
-import { supabase } from '@/lib/supabase'
-import { checkEmailEligibility } from '@/services/email/eligibility.service'
+import { checkEmailEligibility } from "../../services/email/eligibility.service"
+import { supabase } from "../../supabase"
 
 export async function runEligibilityWorker(limit = 100) {
   const { data: leads } = await supabase

@@ -22,6 +22,7 @@ app.get('/ping', (_req, res) => {
   console.log('✅ PING HIT');
   res.json({ ok: true });
 });
+app.use('/leads', leadRoutes)
 app.use('/auth', authRoutes);
 app.use('/campaigns', campaignRoutes);
 app.use('/crud', crudRoutes);

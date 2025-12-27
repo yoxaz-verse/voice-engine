@@ -7,6 +7,7 @@ import { getNextSend } from '../services/decisionEngine'
 import { handleLeadReply } from '../services/handleReply';
 
 import { requireAuth } from '../middleware/requireAuth';
+import { preSendCheck } from '../controllers/send.controller';
 
 const router = Router();
 
@@ -15,6 +16,12 @@ const router = Router();
  */
 
 router.use(requireAuth('operator'));
+
+
+
+
+router.post('/pre-send-check', preSendCheck)
+
 
 
 router.get('/next', async (_req: Request, res: Response) => {

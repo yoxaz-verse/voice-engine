@@ -2,7 +2,8 @@
     "compilerOptions": {
       "target": "ES2022",
       "module": "NodeNext",
-      "moduleResolution": "NodeNext",
+          "resolveJsonModule": true,
+"moduleResolution": "NodeNext",
       "strict": true,
       "skipLibCheck": true,
       "forceConsistentCasingInFileNames": true,    "typeRoots": ["./src/types", "./node_modules/@types"]

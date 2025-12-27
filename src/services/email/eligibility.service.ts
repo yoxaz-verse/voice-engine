@@ -1,6 +1,5 @@
 import dns from 'dns/promises'
 import validator from 'validator'
-import disposableDomains from './disposableDomains.json'
 
 export type EligibilityResult = {
   status: 'eligible' | 'risky' | 'blocked'
@@ -13,6 +12,9 @@ const FREE_PROVIDERS = [
   'outlook.com',
   'hotmail.com'
 ]
+import rawDisposableDomains from './disposableDomains.json'
+
+const disposableDomains = rawDisposableDomains as string[]
 
 export async function checkEmailEligibility(
   email: string

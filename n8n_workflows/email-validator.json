@@ -1,0 +1,102 @@
+{
+    "name": "Campaign Send Loop",
+    "nodes": [
+      {
+        "id": "cron",
+        "name": "Cron Trigger",
+        "type": "n8n-nodes-base.cron",
+        "typeVersion": 1,
+        "position": [200, 300],
+        "parameters": {
+          "interval": "minutes",
+          "minutesInterval": 1
+        }
+      },
+      {
+        "id": "getLead",
+        "name": "Get Next Lead",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 2,
+        "position": [400, 300],
+        "parameters": {
+          "method": "GET",
+          "url": "={{$env.BACKEND_URL}}/campaigns/{{$env.CAMPAIGN_ID}}/next-lead",
+          "responseFormat": "json"
+        }
+      },
+      {
+        "id": "preSendCheck",
+        "name": "Pre Send Check",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 2,
+        "position": [600, 300],
+        "parameters": {
+          "method": "POST",
+          "url": "={{$env.BACKEND_URL}}/send/pre-send-check",
+          "jsonParameters": true,
+          "bodyParametersJson": "={{ JSON.stringify($json) }}",
+          "responseFormat": "json"
+        }
+      },
+      {
+        "id": "decision",
+        "name": "Decision Switch",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 1,
+        "position": [800, 300],
+        "parameters": {
+          "propertyName": "decision",
+          "rules": [
+            { "value": "SEND" },
+            { "value": "DELAY" },
+            { "value": "PAUSE" },
+            { "value": "BLOCK" }
+          ]
+        }
+      },
+      {
+        "id": "sendEmail",
+        "name": "Send Email",
+        "type": "n8n-nodes-base.smtp",
+        "typeVersion": 1,
+        "position": [1000, 200],
+        "parameters": {
+          "fromEmail": "={{$json.from}}",
+          "toEmail": "={{$json.to}}",
+          "subject": "={{$json.subject}}",
+          "text": "={{$json.body}}"
+        }
+      },
+      {
+        "id": "pauseCampaign",
+        "name": "Pause Campaign",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 2,
+        "position": [1000, 350],
+        "parameters": {
+          "method": "POST",
+          "url": "={{$env.BACKEND_URL}}/campaigns/{{$env.CAMPAIGN_ID}}/pause"
+        }
+      }
+    ],
+    "connections": {
+      "Cron Trigger": {
+        "main": [[{ "node": "Get Next Lead", "type": "main", "index": 0 }]]
+      },
+      "Get Next Lead": {
+        "main": [[{ "node": "Pre Send Check", "type": "main", "index": 0 }]]
+      },
+      "Pre Send Check": {
+        "main": [[{ "node": "Decision Switch", "type": "main", "index": 0 }]]
+      },
+      "Decision Switch": {
+        "main": [
+          [{ "node": "Send Email", "type": "main", "index": 0 }],
+          [],
+          [{ "node": "Pause Campaign", "type": "main", "index": 0 }],
+          []
+        ]
+      }
+    }
+  }
+  
