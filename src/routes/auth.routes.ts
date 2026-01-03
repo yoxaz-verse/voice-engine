@@ -7,6 +7,7 @@ const router = Router();
 
 router.post('/login', async (req, res) => {
   try {
+    
     const { email, password } = req.body;
 
     // 1️⃣ Authenticate via Supabase Auth

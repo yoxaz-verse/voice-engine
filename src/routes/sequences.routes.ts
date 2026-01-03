@@ -9,6 +9,7 @@ const router = Router();
 router.use(requireAuth('operator'));
 
 
+// Can be Replicated with Crud 
 router.get('/', async (_req, res) => {
   const sequences = await listActiveSequences();
   res.json(sequences);

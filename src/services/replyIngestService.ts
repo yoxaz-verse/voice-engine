@@ -19,12 +19,10 @@ export async function handleReply(params: {
 
   // 2️⃣ HARD STOP ALL SEQUENCES FOR THIS LEAD
   await supabase
-    .from('lead_sequences')
-    .update({
-      stopped: true,
-      completed: true
-    })
-    .eq('lead_id', leadId);
+  .from('campaign_leads')
+  .update({ status: 'completed' })
+  .eq('lead_id', leadId);
+
 
   // 3️⃣ Log system event (optional but recommended)
   await supabase.from('system_events').insert({

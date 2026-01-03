@@ -5,56 +5,128 @@ import { updateRow } from "./crudService";
  * Attach leads to a campaign
  * NOTE: Direct supabase usage is acceptable here for now
  */
+// services/campaignLeads.service.ts
+
+
+
+
+
+/**
+ * Attach leads to a campaign safely.
+ * - Idempotent
+ * - Does NOT reset existing campaign_leads
+ * - Inserts ONLY missing leads
+ */
 export async function attachLeadsToCampaign(
   campaignId: string,
   leadIds: string[]
 ) {
-  // Remove leads from any existing campaign
-  await supabase
-    .from("campaign_leads")
-    .delete()
-    .in("lead_id", leadIds);
+  if (!campaignId) {
+    throw new Error('campaignId is required');
+  }
 
-  // Attach to this campaign
-  const rows = leadIds.map((leadId) => ({
+  if (!Array.isArray(leadIds) || leadIds.length === 0) {
+    return { inserted: 0 };
+  }
+
+  /* -------------------------------------------------------
+     1️⃣ Fetch existing campaign_leads
+  ------------------------------------------------------- */
+  const { data: existing, error: fetchError } = await supabase
+    .from('campaign_leads')
+    .select('lead_id')
+    .eq('campaign_id', campaignId)
+    .in('lead_id', leadIds);
+
+  if (fetchError) {
+    throw fetchError;
+  }
+
+  const existingLeadIds = new Set(
+    (existing ?? []).map((r) => r.lead_id)
+  );
+
+  /* -------------------------------------------------------
+     2️⃣ Determine new leads only
+  ------------------------------------------------------- */
+  const newLeadIds = leadIds.filter(
+    (id) => !existingLeadIds.has(id)
+  );
+
+  if (newLeadIds.length === 0) {
+    return { inserted: 0 };
+  }
+
+  /* -------------------------------------------------------
+     3️⃣ Build rows (NEW leads ONLY)
+  ------------------------------------------------------- */
+  const rows = newLeadIds.map((leadId) => ({
     campaign_id: campaignId,
     lead_id: leadId,
-    status: "queued",
+    status: 'queued',
+    current_step: 1,
   }));
 
-  await supabase.from("campaign_leads").insert(rows);
+  /* -------------------------------------------------------
+     4️⃣ Insert safely
+  ------------------------------------------------------- */
+  const { error: insertError } = await supabase
+    .from('campaign_leads')
+    .insert(rows);
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  return {
+    inserted: rows.length,
+  };
 }
+
+
+
 
 /**
  * Start campaign (IDEMPOTENT)
  */
 export async function startCampaign(campaignId: string) {
-  // 1. Fetch current campaign state
+  // 1️⃣ Fetch campaign
   const { data: campaign, error } = await supabase
-    .from("campaigns")
-    .select("id, status")
-    .eq("id", campaignId)
+    .from('campaigns')
+    .select('id, status')
+    .eq('id', campaignId)
     .single();
 
   if (error || !campaign) {
-    throw new Error("Campaign not found");
+    throw new Error('Campaign not found');
   }
 
-  // 2. Idempotency guard
-  if (campaign.status === "running") {
-    return; // no-op, safe retry
+  // 2️⃣ Idempotency guard
+  if (campaign.status === 'running') {
+    return;
   }
 
-  // 3. Transition campaign to running
-  // Lifecycle hook enforces validity
-  await updateRow("campaigns", campaignId, {
-    status: "running",
+  // 🔒 NEW GUARD — campaign must have inboxes
+  const { data: inboxes } = await supabase
+    .from('campaign_inboxes')
+    .select('inbox_id')
+    .eq('campaign_id', campaignId)
+    .limit(1);
+
+  if (!inboxes || inboxes.length === 0) {
+    throw new Error('Cannot start campaign without assigned inboxes');
+  }
+
+  // 3️⃣ Transition campaign to running
+  await updateRow('campaigns', campaignId, {
+    status: 'running',
     started_at: new Date().toISOString(),
   });
 
-  // 4. Initialize campaign leads for execution
+  // 4️⃣ Initialize campaign leads (if you already do this)
   await initializeCampaignLeads(campaignId);
 }
+
 
 /**
  * Initialize campaign leads for execution

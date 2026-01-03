@@ -41,7 +41,8 @@ export const TABLE_FIELD_MAP: Record<
       db: 'company',
       behavior: 'plain',
     },
-    operator_id: {
+ 
+      operator_id: {
       db: 'operator_id',
       behavior: 'relation',
       relation: {
@@ -50,7 +51,23 @@ export const TABLE_FIELD_MAP: Record<
         labelKey: 'name',
       },
     },
-  
+    email_eligibility: {
+      db: 'email_eligibility',
+      behavior: 'readonly',
+    },
+    email_eligibility_reason: {
+      db: 'email_eligibility_reason',
+      behavior: 'readonly',
+    },
+    eligibility_processing: {
+      db: 'eligibility_processing',
+      behavior: 'readonly',
+    },
+    email_checked_at: {
+      db: 'email_checked_at',
+      behavior: 'readonly',
+    },
+    
     created_at: {
       db: 'created_at',
       behavior: 'readonly',
@@ -59,15 +76,11 @@ export const TABLE_FIELD_MAP: Record<
   users: {
     id: {
         db: 'id',
-        behavior: 'readonly',
+        behavior: 'plain',
       },
     email: {
       db: 'email',
       behavior: 'plain',
-    },
-    password: {
-      db: 'password_hash',
-      behavior: 'hashed',
     },
     role: {
       db: 'role',
@@ -109,7 +122,6 @@ export const TABLE_FIELD_MAP: Record<
       behavior: 'readonly',
     },
   },
-  
   sequence_analytics: {
     id: {
         db: 'id',
@@ -150,6 +162,184 @@ export const TABLE_FIELD_MAP: Record<
     },
     is_active: {
       db: 'is_active',
+      behavior: 'plain',
+    },
+    created_at: {
+      db: 'created_at',
+      behavior: 'readonly',
+    },
+  },
+  smtp_accounts: {
+    id: {
+      db: 'id',
+      behavior: 'readonly',
+    },
+    provider: {
+      db: 'provider',
+      behavior: 'plain', // mxroute | google (string)
+    },
+    host: {
+      db: 'host',
+      behavior: 'plain',
+    },
+    port: {
+      db: 'port',
+      behavior: 'plain',
+    },
+    username: {
+      db: 'username',
+      behavior: 'plain',
+    },
+    password: {
+      db: 'password',
+      behavior: 'plain',
+    },
+    encryption: {
+      db: 'encryption',
+      behavior: 'plain', // ssl | tls | starttls
+    },
+    sending_domain_id: {
+      db: 'sending_domain_id',
+      behavior: 'plain',
+    },
+    is_valid: {
+      db: 'is_valid',
+      behavior: 'plain',
+    },
+    
+    created_at: {
+      db: 'created_at',
+      behavior: 'readonly',
+    },
+  },
+  
+  sending_domains: {
+    id: {
+      db: 'id',
+      behavior: 'readonly',
+    },
+    domain: {
+      db: 'domain',
+      behavior: 'plain',
+    },
+    spf_verified: {
+      db: 'spf_verified',
+      behavior: 'plain',
+    },
+    dkim_verified: {
+      db: 'dkim_verified',
+      behavior: 'plain',
+    },
+    dmarc_verified: {
+      db: 'dmarc_verified',
+      behavior: 'plain',
+    },
+    daily_limit: {
+      db: 'daily_limit',
+      behavior: 'plain', // hard cap, not warm-up
+    },
+    hourly_limit: {
+      db: 'hourly_limit',
+      behavior: 'plain', // hard cap, not warm-up
+    },
+    health_score: {
+      db: 'health_score',
+      behavior: 'readonly',
+    },
+    created_at: {
+      db: 'created_at',
+      behavior: 'readonly',
+    },
+  },
+  inboxes: {
+    id: {
+      db: 'id',
+      behavior: 'readonly',
+    },
+    email_address: {
+      db: 'email_address',
+      behavior: 'plain',
+    },
+    operator_id: {
+      db: 'operator_id',
+      behavior: 'plain',
+    },
+    provider: {
+      db: 'provider',
+      behavior: 'plain', // mxroute | google
+    },
+    sending_domain_id: {
+      db: 'sending_domain_id',
+      behavior: 'plain',
+    },
+    smtp_account_id: {
+      db: 'smtp_account_id',
+      behavior: 'plain', // required for mxroute
+    },
+    daily_limit: {
+      db: 'daily_limit',
+      behavior: 'plain', // fallback cap
+    },
+    hourly_limit: {
+      db: 'hourly_limit',
+      behavior: 'plain', // fallback cap
+    },
+    health_score: {
+      db: 'health_score',
+      behavior: 'readonly',
+    },
+    sent_count: {
+      db: 'sent_count',
+      behavior: 'readonly',
+    },
+    failed_count: {
+      db: 'failed_count',
+      behavior: 'readonly',
+    },
+    replies_count: {
+      db: 'replies_count',
+      behavior: 'readonly',
+    },
+    consecutive_failures: {
+      db: 'consecutive_failures',
+      behavior: 'readonly',
+    },
+    is_paused: {
+      db: 'is_paused',
+      behavior: 'plain',
+    },
+    paused_reason: {
+      db: 'paused_reason',
+      behavior: 'plain',
+    },
+    created_at: {
+      db: 'created_at',
+      behavior: 'readonly',
+    },
+  },
+  sequence_steps: {
+    id: {
+        db: 'id',
+        behavior: 'readonly',
+      }, 
+      sequence_id: {
+        db: 'sequence_id',
+        behavior: 'plain',
+      },
+        step_number: {
+      db: 'step_number',
+      behavior: 'plain',
+    },
+        delay_days: {
+      db: 'delay_days',
+      behavior: 'plain',
+    },
+        subject: {
+      db: 'subject',
+      behavior: 'plain',
+    },
+        body: {
+      db: 'body',
       behavior: 'plain',
     },
     created_at: {
@@ -223,13 +413,17 @@ export const TABLE_FIELD_MAP: Record<
       behavior: 'readonly',
     },
   },
-  inboxes: {
-    email: {
-      db: 'email_address',
-      behavior: 'alias',
+  campaign_inboxes: {
+    id: {
+      db: 'id',
+      behavior: 'readonly',
     },
-    provider: {
-      db: 'provider',
+    campaign_id: {
+      db: 'campaign_id',
+      behavior: 'plain',
+    },
+    inbox_id: {
+      db: 'inbox_id',
       behavior: 'plain',
     },
     created_at: {
@@ -237,4 +431,5 @@ export const TABLE_FIELD_MAP: Record<
       behavior: 'readonly',
     },
   },
+
 };

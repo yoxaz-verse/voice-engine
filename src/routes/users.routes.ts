@@ -1,6 +1,4 @@
 import { Router } from 'express';
-import { createUser } from '../services/userService.js';
-import { requireBootstrapKey } from '../middleware/requireBootStrapKey.js';
 import { supabaseAdmin } from '../utils/supabaseAdmin.js';
 import { supabase } from '../supabase.js';
 
@@ -80,7 +78,7 @@ router.post('/bootstrap', async (req, res) => {
 });
 
 
-  router.post('/create-user', 
+router.post('/create-user', 
     // requireAuth('admin'), 
   
   async (req, res) => {

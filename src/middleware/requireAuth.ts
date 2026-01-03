@@ -10,44 +10,80 @@ type JwtPayload = {
   operator_id?: string | null;
 };
 
-export function requireAuth(minimumRole?: Role) {
+
+export function requireAuth(
+  minimumRole?: Role,
+  requireOperator: boolean = false
+) {
+
+  
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       /* ======================================================
-         1️⃣ JWT AUTH (PRIMARY – DASHBOARD / USER SESSIONS)
+         1️⃣ JWT AUTH
       ====================================================== */
       const authHeader = req.headers.authorization;
 
-      if (authHeader && authHeader.startsWith('Bearer ')) {
+      if (authHeader?.startsWith('Bearer ')) {
         const token = authHeader.slice(7).trim();
 
         let user: JwtPayload;
         try {
           user = verifyToken(token) as JwtPayload;
         } catch {
+          clearAuthCookies(res);
           return res.status(401).json({ error: 'Invalid token' });
         }
 
-        req.auth = {
-          type: 'user',
-          user_id: user.user_id,
-          operator_id: user.operator_id ?? null,
-          role: user.role
-        };
+        /* ======================================================
+           2️⃣ DB REVALIDATION (AUTHORITATIVE)
+        ====================================================== */
+        const { data: dbUser } = await supabase
+          .from('users')
+          .select('id, role, operator_id, active')
+          .eq('id', user.user_id)
+          .single();
 
-        if (minimumRole && !hasPermission(user.role, minimumRole)) {
+        if (!dbUser || !dbUser.active) {
+          clearAuthCookies(res);
+          return res.status(401).json({ error: 'User no longer active' });
+        }
+
+        /* ======================================================
+           3️⃣ ROLE PERMISSION CHECK
+        ====================================================== */
+        if (minimumRole && !hasPermission(dbUser.role, minimumRole)) {
           return res.status(403).json({
             error: 'Insufficient permissions',
             required: minimumRole,
-            actual: user.role
+            actual: dbUser.role,
           });
         }
+
+        /* ======================================================
+           4️⃣ OPERATOR CAPABILITY CHECK
+        ====================================================== */
+        if (requireOperator && !dbUser.operator_id) {
+          return res.status(403).json({
+            error: 'Operator access required',
+          });
+        }
+
+        /* ======================================================
+           5️⃣ ATTACH AUTH CONTEXT
+        ====================================================== */
+        req.auth = {
+          type: 'user',
+          user_id: dbUser.id,
+          role: dbUser.role,
+          operator_id: dbUser.operator_id ?? null,
+        };
 
         return next();
       }
 
       /* ======================================================
-         2️⃣ API KEY AUTH (FALLBACK – SYSTEM / EXTERNAL ACCESS)
+         6️⃣ API KEY AUTH (UNCHANGED)
       ====================================================== */
       const apiKeyHeader = req.headers['x-api-key'];
 
@@ -57,43 +93,51 @@ export function requireAuth(minimumRole?: Role) {
           .update(apiKeyHeader)
           .digest('hex');
 
-        const { data: key, error } = await supabase
+        const { data: key } = await supabase
           .from('api_keys')
           .select('id, user_id, operator_id, role, active')
           .eq('key_hash', keyHash)
           .single();
 
-        if (error || !key || !key.active) {
+        if (!key || !key.active) {
           return res.status(403).json({ error: 'Invalid API key' });
+        }
+
+        if (minimumRole && !hasPermission(key.role as Role, minimumRole)) {
+          return res.status(403).json({
+            error: 'Insufficient permissions',
+            required: minimumRole,
+            actual: key.role,
+          });
+        }
+
+        if (requireOperator && !key.operator_id) {
+          return res.status(403).json({
+            error: 'Operator access required',
+          });
         }
 
         req.auth = {
           type: 'api',
           api_key_id: key.id,
           user_id: key.user_id,
+          role: key.role as Role,
           operator_id: key.operator_id,
-          role: key.role as Role
         };
-
-        if (minimumRole && !hasPermission(key.role as Role, minimumRole)) {
-          return res.status(403).json({
-            error: 'Insufficient permissions',
-            required: minimumRole,
-            actual: key.role
-          });
-        }
 
         return next();
       }
 
-      /* ======================================================
-         3️⃣ NO AUTH PROVIDED
-      ====================================================== */
       return res.status(401).json({ error: 'Authentication required' });
-
     } catch (err) {
       console.error('Auth error:', err);
       return res.status(401).json({ error: 'Authentication failed' });
     }
   };
+}
+
+function clearAuthCookies(res: Response) {
+  res.clearCookie('auth_token', { path: '/' });
+  res.clearCookie('user_role', { path: '/' });
+  res.clearCookie('operator_id', { path: '/' });
 }

@@ -21,36 +21,36 @@ router.post('/leads/upload', async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
-router.post('/campaign/assign-sequence', async (req, res) => {
-  const operatorId = getEffectiveOperatorId(req);
-  await assignSequence(operatorId, req.body.sequence_id);
-  res.json({ success: true });
-});
+// router.post('/campaign/assign-sequence', async (req, res) => {
+//   const operatorId = getEffectiveOperatorId(req);
+//   await assignSequence(operatorId, req.body.sequence_id);
+//   res.json({ success: true });
+// });
 
-router.post('/campaign/start', async (req, res) => {
-  const operatorId = getEffectiveOperatorId(req);
-  await startCampaign(operatorId);
-  res.json({ success: true });
-});
+// router.post('/campaign/start', async (req, res) => {
+//   const operatorId = getEffectiveOperatorId(req);
+//   await startCampaign(operatorId);
+//   res.json({ success: true });
+// });
 
-router.post('/campaign/pause', async (req, res) => {
-  const operatorId = getEffectiveOperatorId(req);
-  await pauseCampaign(operatorId);
-  res.json({ success: true });
-});
+// router.post('/campaign/pause', async (req, res) => {
+//   const operatorId = getEffectiveOperatorId(req);
+//   await pauseCampaign(operatorId);
+//   res.json({ success: true });
+// });
 
-router.post('/campaign/resume', async (req, res) => {
-  const operatorId = getEffectiveOperatorId(req);
-  await resumeCampaign(operatorId);
-  res.json({ success: true });
-});
+// router.post('/campaign/resume', async (req, res) => {
+//   const operatorId = getEffectiveOperatorId(req);
+//   await resumeCampaign(operatorId);
+//   res.json({ success: true });
+// });
 
 router.get('/campaign/stats', async (req, res) => {
   const operatorId = getEffectiveOperatorId(req);
   const stats = await getCampaignStats(operatorId);
   res.json(stats);
 });
-
+ 
 router.get('/replies', async (req, res) => {
   const operatorId = getEffectiveOperatorId(req);
   const replies = await getOperatorReplies(operatorId);

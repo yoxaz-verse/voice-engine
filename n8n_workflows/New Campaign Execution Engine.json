@@ -1,0 +1,222 @@
+{
+  "name": "New Campaign Execution Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://35d4a0274bfb.ngrok-free.app/crud/campaigns?status=running",
+        "options": {
+          "splitIntoItems": true
+        }
+      },
+      "id": "4e9e9c34-a415-42d5-aee1-d87afa2240f3",
+      "name": "Fetch Running Campaigns",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://35d4a0274bfb.ngrok-free.app/execution/campaigns/{{ $json.id }}/next-executions",
+        "options": {}
+      },
+      "id": "95a41028-7b25-49d1-aa48-1a68536382a9",
+      "name": "Fetch Next Executions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        }
+      },
+      "id": "dfcd68fa-ac33-4bfb-8209-c3886b3b0095",
+      "name": "Cron Trigger1",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "executions",
+        "options": {}
+      },
+      "id": "58d6ed34-011b-4b25-b829-6a3570fb200c",
+      "name": "Split Executions1",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 1,
+      "position": [
+        896,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://35d4a0274bfb.ngrok-free.app/execution/send-email",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={ \"campaign_lead_id\": \"{{ $json.campaign_lead_id }}\" }"
+      },
+      "id": "d93a04ef-4d58-4229-837f-1524703cea32",
+      "name": "Send Email1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 30
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "=https://35d4a0274bfb.ngrok-free.app/execution/campaign-leads/{{ $('Split Executions1').item.json.campaign_lead_id }}/sent",
+        "options": {}
+      },
+      "id": "9cb741b0-5a88-432d-9ec5-56f8898c6b53",
+      "name": "Mark Sent1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "=https://35d4a0274bfb.ngrok-free.app/execution/campaign-leads/{{ $json.campaign_lead_id }}/failed",
+        "options": {}
+      },
+      "id": "c1a7dc26-9680-4a51-8074-8cebd66e57a3",
+      "name": "Mark Failed1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "unit": "seconds"
+      },
+      "id": "ed91e6bb-ffe1-4ba9-bb6f-462202d139a6",
+      "name": "Throttle Wait1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        96
+      ],
+      "webhookId": "d0d3be76-4352-4846-9d83-da3ea3b3abdf"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Fetch Running Campaigns": {
+      "main": [
+        [
+          {
+            "node": "Fetch Next Executions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Next Executions": {
+      "main": [
+        [
+          {
+            "node": "Split Executions1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cron Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Fetch Running Campaigns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Executions1": {
+      "main": [
+        [
+          {
+            "node": "Send Email1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email1": {
+      "main": [
+        [
+          {
+            "node": "Mark Sent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Sent1": {
+      "main": [
+        [
+          {
+            "node": "Throttle Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Failed1": {
+      "main": [
+        [
+          {
+            "node": "Throttle Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2d5278f8-771d-4208-8b1e-e5738f70f062",
+  "meta": {
+    "instanceId": "1ef6b36b65b3b488b540965451abf1cd36a075f5a51ab524f3e08d97ec52b4cd"
+  },
+  "id": "qn2hKlBJkOVjT7Ki",
+  "tags": []
+}

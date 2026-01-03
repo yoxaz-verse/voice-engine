@@ -2,8 +2,11 @@
 import { AllowedTable } from '../config/allowedTables';
 import { supabase } from '../supabase';
 import { buildSelect } from '../utils/buildSelectQuery';
-import { runBeforeWrite } from './domain';
+import { resolveAfterRead } from './domain/readResolvers';
+import { runBeforeDelete } from './domain/runBeforeDelete';
+import { runBeforeWrite } from './domain/runBeforeWrite';
 import { transformForWrite, transformForRead } from './fieldTransform';
+type DbRow = Record<string, unknown>;
 
 export async function listRows(
   table: AllowedTable,
@@ -11,9 +14,7 @@ export async function listRows(
 ) {
   const select = buildSelect(table);
 
-  let query = supabase
-    .from(table)
-    .select(select);
+  let query = supabase.from(table).select(select);
 
   for (const [key, value] of Object.entries(filters)) {
     query = query.eq(key, value);
@@ -22,12 +23,15 @@ export async function listRows(
   const { data, error } = await query;
   if (error) throw error;
 
-  console.log("data",data);
-  
-  return (data ?? []).map((row: Record<string, any>) =>
+  const rows = (data ?? []).map((row: Record<string, unknown>) =>
     transformForRead(table, row)
   );
+  
+
+  // ✅ DOMAIN-SAFE EXTENSION POINT
+  return await resolveAfterRead(table, rows);
 }
+
 
 
 
@@ -72,6 +76,9 @@ export async function deleteRow(
   table: AllowedTable,
   id: string
 ) {
+  // 🔥 lifecycle first
+  await runBeforeDelete(table, id);
+
   const { error } = await supabase
     .from(table)
     .delete()
