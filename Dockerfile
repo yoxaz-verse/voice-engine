@@ -14,7 +14,7 @@ RUN npm install
 COPY . .
 
 # Expose backend port
-EXPOSE 3000
+EXPOSE 3002
 
 # Start backend using tsx
 CMD ["npm", "run", "start"]
