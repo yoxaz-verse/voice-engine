@@ -13,10 +13,10 @@ let esl: InstanceType<typeof ESL.Connection> | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
 let reconnectAttempts = 0;
 
-const MAX_BACKOFF = 30_000; // 30s cap
+const MAX_BACKOFF = 30_000;
 
 function backoffDelay(attempt: number) {
-    return Math.min(1000 * 2 ** attempt, MAX_BACKOFF);
+    return Math.min(1000 * Math.pow(2, attempt), MAX_BACKOFF);
 }
 
 export function connectESL() {
@@ -31,24 +31,24 @@ export function connectESL() {
 
     esl = new ESL.Connection(FS_HOST, FS_PORT, FS_PASSWORD);
 
-esl.on('esl::ready', async () => {
-    console.log('[FS] ESL socket connected');
-    eslState.current = 'connected';
+    // 🔑 AUTH OK, SOCKET OPEN
+    esl.on('esl::ready', () => {
+        console.log('[FS] ESL socket connected');
+        eslState.current = 'connected';
 
-    try {
-        // ✅ pass raw ESL connection
-        await registerFSEvents(esl!);
-
-        eslState.current = 'ready';
-        reconnectAttempts = 0;
-        console.log('[FS] ESL fully ready');
-    } catch (err) {
-        console.error('[FS] Event registration failed', err);
-        eslState.current = 'error';
-        scheduleReconnect();
-    }
-});
-
+        // 🔥 DO NOT AWAIT
+        registerFSEvents(esl!)
+            .then(() => {
+                eslState.current = 'ready';
+                reconnectAttempts = 0;
+                console.log('[FS] ESL fully ready');
+            })
+            .catch((err) => {
+                console.error('[FS] Event registration failed', err);
+                eslState.current = 'error';
+                scheduleReconnect();
+            });
+    });
 
     esl.on('esl::end', () => {
         console.error('[FS] ESL disconnected');
@@ -74,7 +74,6 @@ function scheduleReconnect() {
     if (reconnectTimer) return;
 
     const delay = backoffDelay(reconnectAttempts);
-
     console.log(`[FS] Reconnecting ESL in ${delay}ms`);
 
     reconnectTimer = setTimeout(() => {
@@ -84,12 +83,11 @@ function scheduleReconnect() {
 }
 
 export function getESL() {
-   if (!esl || eslState.current !== 'ready') {
-    throw new Error(`ESL_NOT_READY (state=${eslState.current})`);
-}
-
+    if (!esl || eslState.current !== 'ready') {
+        throw new Error(`ESL_NOT_READY (state=${eslState.current})`);
+    }
     return esl;
 }
 
-// INITIAL CONNECT (single entry point)
+// 🔥 SINGLE ENTRY POINT
 connectESL();

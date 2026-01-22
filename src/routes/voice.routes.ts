@@ -47,9 +47,19 @@ router.get('/:uuid/status', (req, res) => {
 
 
 router.post('/test-esl', (_req, res) => {
-  const esl = getESL();
+  let esl;
 
-  const cmd = 'originate loopback/1000/default &park()';
+  try {
+    esl = getESL();
+  } catch (e) {
+    return res.status(503).json({
+      ok: false,
+      error: 'ESL_NOT_READY',
+      message: String(e),
+    });
+  }
+
+  const cmd = 'status';
 
   esl.api(cmd, (response) => {
     const body = response.getBody();
@@ -62,6 +72,7 @@ router.post('/test-esl', (_req, res) => {
     });
   });
 });
+
 
 export default router;
 

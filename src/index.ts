@@ -36,10 +36,11 @@ app.use('/voice', voiceRoutes);
 
 const PORT = process.env.PORT || 3004;
 
-console.log('🔥 INDEX.TS LOADED');
+console.log('🔥 INDEX.TS LOADE SUCEESFULLY');
 console.log('[ENV]', {
   FS_HOST: process.env.FS_HOST,
   FS_PORT: process.env.FS_PORT,
+  FS_PASSWORD: process.env.FS_PASSWORD,
 });
 
 app.listen(PORT, () => {
