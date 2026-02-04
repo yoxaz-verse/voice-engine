@@ -1,21 +1,23 @@
-import ESL from 'modesl';
+import { eventRouter } from "./eventRouter";
 
-export async function registerFSEvents(
-  esl: InstanceType<typeof ESL.Connection>
-) {
-    console.log('[FS] Registering events');
+export function registerFSEvents(esl: any) {
+    esl.on("esl::event::*", (evt: any) => {
+        const name = evt.getHeader("Event-Name");
+        const uuid = evt.getHeader("Unique-ID");
 
-    // REQUIRED FIRST
-    esl.events('plain', 'ALL');
+        if (!name) return;
 
-    console.log('[FS] Event subscription sent');
+        const headers: Record<string, string> = {};
+        evt.headers?.forEach((v: string, k: string) => {
+            headers[k] = v;
+        });
 
-    esl.on('event::plain::*', (evt: any) => {
-        const eventName = evt.getHeader('Event-Name');
-        if (!eventName) return;
+        console.log("[FS EVENT]", name, uuid);
 
-        if (eventName.startsWith('CHANNEL_')) {
-            console.log(`[FS EVENT] ${eventName}`);
-        }
+        eventRouter.emit({
+            name,
+            uuid,
+            headers,
+        });
     });
 }

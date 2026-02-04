@@ -1,7 +1,7 @@
-declare module 'modesl' {
-  import { EventEmitter } from 'events';
+declare module "modesl" {
+  import { EventEmitter } from "events";
 
-  class Connection extends EventEmitter {
+  export class Connection extends EventEmitter {
     constructor(
       host: string,
       port: number,
@@ -17,8 +17,4 @@ declare module 'modesl' {
 
     filter?(header: string, value: string): void;
   }
-
-  export = {
-    Connection,
-  };
 }

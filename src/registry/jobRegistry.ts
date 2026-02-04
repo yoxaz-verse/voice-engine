@@ -1,4 +1,4 @@
- type JobMeta = {
+type JobMeta = {
     jobUuid: string;
     voiceCallId: string;
     campaignId: string;
@@ -7,34 +7,28 @@
 };
 
 class JobRegistry {
-    private queue: JobMeta[] = [];
+  private jobs = new Map<string, JobMeta>();
 
-    create(jobUuid: string, meta: Omit<JobMeta, 'jobUuid' | 'createdAt'>) {
-        this.queue.push({
-            jobUuid,
-            ...meta,
-            createdAt: Date.now(),
-        });
-    }
+  create(jobUuid: string, meta: Omit<JobMeta, 'jobUuid' | 'createdAt'>) {
+    this.jobs.set(jobUuid, {
+      jobUuid,
+      ...meta,
+      createdAt: Date.now(),
+    });
+  }
 
-    consumeNext(): JobMeta | null {
-        return this.queue.shift() || null;
-    }
+  get(jobUuid: string) {
+    return this.jobs.get(jobUuid);
+  }
 
-    sweep(ttlMs: number) {
-        const now = Date.now();
+  remove(jobUuid: string) {
+    this.jobs.delete(jobUuid);
+  }
 
-        this.queue = this.queue.filter(job => {
-            if (now - job.createdAt > ttlMs) {
-                console.error('[JOB] TTL expired', {
-                    job_uuid: job.jobUuid,
-                    voice_call_id: job.voiceCallId,
-                });
-                return false;
-            }
-            return true;
-        });
-    }
+  list() {
+    return [...this.jobs.values()];
+  }
 }
+
 
 export const jobRegistry = new JobRegistry();

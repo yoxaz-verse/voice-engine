@@ -1,15 +1,23 @@
 import dotenv from 'dotenv';
 dotenv.config(); // 🔥 MUST BE FIRST
 
+
+// 🔥 MUST COME FIRST
 import './freeswitch/esl';
-// 🔥 THIS LINE IS REQUIRED
-import './observers/logObserver';
-import './observers/callslifeCycleObserver';
+
+// 🔥 MUST COME SECOND (event listeners)
 import './freeswitch/bootstrap';
 
+// observers AFTER bootstrap
+import './observers/logObserver';
+import './observers/callslifeCycleObserver';
+
+import './freeswitch/bootstrap';
 import express from 'express';
 import cors from 'cors';
 import voiceRoutes from './routes/voice.routes';
+
+// startFSSocketServer(Number(process.env.FS_SOCKET_PORT)); // Only for same server
 
 const app = express();
 app.use(express.json());

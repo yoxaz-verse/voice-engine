@@ -1,8 +1,9 @@
 
 import { Router } from 'express';
-import { originateCall } from '../freeswitch/callController';
 import { getESL } from '../freeswitch/esl';
 import { callRegistry } from '../registry/callRegistry';
+import { originateCall } from '../freeswitch/originate';
+import { jobRegistry } from '../registry/jobRegistry';
 
 const router = Router();
 
@@ -21,6 +22,7 @@ router.post('/start', async (req, res) => {
       voiceCallId,
     });
 
+
     res.json({
       ok: true,
       status: 'queued',
@@ -33,8 +35,8 @@ router.post('/start', async (req, res) => {
 });
 
 
-router.get('/:uuid/status', (req, res) => {
-  const call = callRegistry.get(req.params.uuid);
+router.get('/:voiceCallId/status', (req, res) => {
+  const call = callRegistry.getByVoiceCallId(req.params.voiceCallId);
 
   if (!call) {
     return res.status(404).json({ error: 'Call not found' });
@@ -42,6 +44,8 @@ router.get('/:uuid/status', (req, res) => {
 
   res.json(call);
 });
+
+
 
 
 
@@ -70,6 +74,33 @@ router.post('/test-esl', (_req, res) => {
       ok: true,
       reply: body,
     });
+  });
+});
+
+
+
+/**
+ * --------------------------------------------------
+ * DEBUG: List all active calls
+ * --------------------------------------------------
+ */
+router.get('/_debug/calls', (_req, res) => {
+  console.log("🌐 HTTP served by PID", process.pid);
+  const calls = callRegistry.list();
+  res.json({ count: calls.length, calls });
+});
+
+/**
+ * --------------------------------------------------
+ * DEBUG: List all pending jobs
+ * --------------------------------------------------
+ */
+router.get('/_debug/jobs', (_req, res) => {
+  const jobs = jobRegistry.list();
+
+  res.json({
+    count: jobs.length,
+    jobs,
   });
 });
 
