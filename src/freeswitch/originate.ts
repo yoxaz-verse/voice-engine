@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { getESL } from "./eslClient";
+import { getESL } from "./esl";  // Import from local esl module
 import { jobRegistry } from "../registry/jobRegistry";
 
 export function originateCall({
@@ -20,19 +20,18 @@ export function originateCall({
 
     const vars = [
         `origination_uuid=${callUuid}`,
+        `call_uuid=${callUuid}`,            // ← ADD THIS
         `job_uuid=${jobUuid}`,
         `voice_call_id=${voiceCallId}`,
         `campaign_id=${campaignId}`,
         `lead_id=${leadId}`,
-        `ignore_early_media=true`,
-        `originate_timeout=30`,
-        `export_vars=job_uuid,voice_call_id,campaign_id,lead_id`,
+        `export_vars=call_uuid,job_uuid,voice_call_id,campaign_id,lead_id`,
     ].join(",");
 
 
 
     const dialString =
-        `{${vars}}loopback/park`;
+        `{${vars}}loopback/answer_and_park`;
 
     esl.api(`bgapi originate ${dialString} &park`, (res: any) => {
         console.log("[BGAPI]", res.getBody());

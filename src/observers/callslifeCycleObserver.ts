@@ -1,68 +1,160 @@
-// src/observers/lifecycleObserver.ts
+// src/observers/callslifeCycleObserver.ts
 import { eventRouter } from '../freeswitch/eventRouter';
-import { reduce } from '../reducers/lifecycleReducer';
+import { startRecording, stopRecording } from '../freeswitch/recording';
+import { pullRecordingFromFS } from '../freeswitch/recordingTransfer';
 import { callRegistry } from '../registry/callRegistry';
 import { jobRegistry } from '../registry/jobRegistry';
+import { CallState } from '../freeswitch/callState';
 
+/**
+ * Map FreeSWITCH hangup cause to CallState
+ */
+function mapHangupCause(headers: Record<string, string>): CallState {
+    const cause = headers['Hangup-Cause'] || headers['variable_hangup_cause'];
 
+    switch (cause) {
+        case 'NORMAL_CLEARING':
+            return 'COMPLETED';
+        case 'ORIGINATOR_CANCEL':
+            return 'CANCELLED';
+        case 'NO_ANSWER':
+        case 'NO_USER_RESPONSE':
+            return 'FAILED';
+        default:
+            return 'FAILED';
+    }
+}
+
+/**
+ * Resolve A-leg UUID from any event UUID
+ */
+function resolveALegUuid(eventUuid: string): string | undefined {
+    if (callRegistry.has(eventUuid)) {
+        return eventUuid;
+    }
+    const call = callRegistry.findByLegUuid(eventUuid);
+    if (call) {
+        return call.callUuid;
+    }
+    return undefined;
+}
+
+/**
+ * 1️⃣ CHANNEL_CREATE
+ * Create logical call ONLY on A-leg.
+ */
 eventRouter.on('CHANNEL_CREATE', (e) => {
     if (!e.uuid) return;
 
-    const jobUuid =
-        e.headers['variable_job_uuid'] ||
-        e.headers['Job-UUID'];
+    const callUuid = e.headers['variable_call_uuid'];
+    const leg = e.headers['variable_loopback_leg']; // A or B
 
-    if (!jobUuid) {
-        console.warn('[CALL] CREATED WITHOUT job_uuid', e.uuid);
-        return;
+    if (!callUuid) return;
+
+    // ✅ A-LEG → create logical call
+    if (leg === 'A') {
+        if (!callRegistry.has(callUuid)) {
+            callRegistry.create(callUuid, e.headers);
+            console.log('📦 [ESL] CALL CREATED (A-LEG)', callUuid);
+        }
     }
 
-    const job = jobRegistry.get(jobUuid);
-    if (!job) {
-        console.warn('[CALL] No job found for job_uuid', jobUuid);
-        return;
+    // 🔗 B-LEG → link only
+    if (leg === 'B') {
+        callRegistry.linkBLeg(callUuid, e.uuid);
+        console.log('🔗 [ESL] B-LEG LINKED', { callUuid, bLegUuid: e.uuid });
     }
 
-    callRegistry.create(e.uuid, e.headers);
-
-    callRegistry.bindJob(e.uuid, {
-        jobUuid,
-        voiceCallId: job.voiceCallId,
-        campaignId: job.campaignId,
-        leadId: job.leadId,
-    });
-
-    console.log('[CALL CREATED + BOUND]', {
-        callUuid: e.uuid,
-        jobUuid,
-        voiceCallId: job.voiceCallId,
-    });
+    // 🔁 Bind job if present
+    const jobUuid = e.headers['variable_job_uuid'] || e.headers['Job-UUID'];
+    if (jobUuid) {
+        const job = jobRegistry.get(jobUuid);
+        if (job) {
+            callRegistry.bindJob(callUuid, {
+                jobUuid,
+                voiceCallId: job.voiceCallId,
+                campaignId: job.campaignId,
+                leadId: job.leadId,
+            });
+            console.log('✅ [ESL] CALL BOUND TO JOB', { callUuid, jobUuid });
+        }
+    }
 });
 
-
-
+/**
+ * 2️⃣ CHANNEL_ANSWER
+ */
 eventRouter.on('CHANNEL_ANSWER', (e) => {
     if (!e.uuid) return;
+    const callUuid = resolveALegUuid(e.uuid);
+    if (!callUuid) return;
 
-    const call = callRegistry.get(e.uuid);
-    const next = reduce(call?.state, 'CHANNEL_ANSWER');
+    const call = callRegistry.get(callUuid);
+    if (!call || call.state === 'ANSWERED') return;
 
-    if (!next) {
-        callRegistry.markCorrupt(e.uuid, 'INVALID_ANSWER_SEQUENCE');
-        return;
+    // Optional: Start recording if not already started
+    if (!call.recordingPath) {
+        const recordingPath = startRecording(callUuid, call.voiceCallId ?? callUuid);
+        callRegistry.update(callUuid, { recordingPath });
+        console.log('🎙️ [ESL] RECORDING STARTED', { callUuid, recordingPath });
     }
 
-    callRegistry.updateState(e.uuid, next);
-    console.log('[CALL] ANSWERED', e.uuid);
+    callRegistry.updateState(callUuid, 'ANSWERED');
+    console.log('📞 [ESL] CALL ANSWERED', callUuid);
 });
 
+/**
+ * 3️⃣ CHANNEL_HANGUP (MAIN FINALIZATION POINT)
+ */
 eventRouter.on('CHANNEL_HANGUP', (e) => {
     if (!e.uuid) return;
+    const callUuid = resolveALegUuid(e.uuid);
+    if (!callUuid) return;
 
-    const call = callRegistry.get(e.uuid);
-    const next = reduce(call?.state, 'CHANNEL_HANGUP');
-    if (!next) return;
+    const call = callRegistry.get(callUuid);
+    if (!call) return;
 
-    callRegistry.updateState(e.uuid, next);
-    console.log('[CALL] TERMINATED', e.uuid);
+    // Ignore if already finalized (e.g. from other leg event)
+    if (['COMPLETED', 'FAILED', 'CANCELLED'].includes(call.state)) return;
+
+    console.log('🔴 [ESL] CHANNEL_HANGUP RECEIVED', { callUuid, cause: e.headers['Hangup-Cause'] });
+
+    // 🛑 STOP RECORDING (Gaurded by idempotency)
+    if (call.recordingPath && !call.recordingStopped) {
+        stopRecording(callUuid);
+        callRegistry.update(callUuid, { recordingStopped: true });
+
+        pullRecordingFromFS(
+            process.env.FS_HOST!,
+            call.recordingPath,
+            call.voiceCallId ?? callUuid!
+        );
+    }
+
+
+    const finalState = mapHangupCause(e.headers);
+    callRegistry.finalize(callUuid, finalState);
+    console.log(`🏁 [ESL] CALL FINALIZED: ${finalState}`, callUuid);
+
+    // 4️⃣ DELAYED CLEANUP (30 SECONDS)
+    console.log('🧹 [ESL] SCHEDULED CLEANUP IN 30S', callUuid);
+    setTimeout(() => {
+        callRegistry.remove(callUuid);
+        console.log('🗑️ [ESL] CALL REMOVED FROM REGISTRY', callUuid);
+    }, 30_000).unref();
 });
+
+/**
+ * 5️⃣ CHANNEL_DESTROY
+ */
+eventRouter.on("CHANNEL_DESTROY", (e) => {
+    if (!e.uuid) return;
+    const callUuid = resolveALegUuid(e.uuid);
+    if (!callUuid) return;
+
+    const call = callRegistry.get(callUuid);
+    if (!call) return;
+
+    console.log('ℹ️ [ESL] CHANNEL_DESTROY LOGGED', { callUuid, state: call.state });
+});
+

@@ -4,6 +4,12 @@ import { getESL } from '../freeswitch/esl';
 import { callRegistry } from '../registry/callRegistry';
 import { originateCall } from '../freeswitch/originate';
 import { jobRegistry } from '../registry/jobRegistry';
+import {
+  hangupCall,
+  parkCall,
+  holdCall,
+  resumeCall,
+} from '../freeswitch/callControl';
 
 const router = Router();
 
@@ -37,46 +43,23 @@ router.post('/start', async (req, res) => {
 
 router.get('/:voiceCallId/status', (req, res) => {
   const call = callRegistry.getByVoiceCallId(req.params.voiceCallId);
-
   if (!call) {
     return res.status(404).json({ error: 'Call not found' });
   }
 
-  res.json(call);
+  // Normalize response
+  const response = {
+    callUuid: call.callUuid,
+    voiceCallId: call.voiceCallId,
+    state: call.state,
+    recordingPath: call.recordingPath,
+    createdAt: call.createdAt,
+    hungupAt: call.hungupAt,
+    finalOutcome: call.finalOutcome,
+  };
+
+  res.json(response);
 });
-
-
-
-
-
-
-router.post('/test-esl', (_req, res) => {
-  let esl;
-
-  try {
-    esl = getESL();
-  } catch (e) {
-    return res.status(503).json({
-      ok: false,
-      error: 'ESL_NOT_READY',
-      message: String(e),
-    });
-  }
-
-  const cmd = 'status';
-
-  esl.api(cmd, (response) => {
-    const body = response.getBody();
-
-    console.log('[TEST] ESL reply:', body);
-
-    res.json({
-      ok: true,
-      reply: body,
-    });
-  });
-});
-
 
 
 /**
@@ -104,8 +87,48 @@ router.get('/_debug/jobs', (_req, res) => {
   });
 });
 
+router.post('/:voiceCallId/hangup', (req, res) => {
+  try {
+    hangupCall(req.params.voiceCallId);
+    res.json({ ok: true });
+  } catch (e: any) {
+    const status = e.message === 'CALL_NOT_FOUND' ? 404 : 400;
+    res.status(status).json({ error: e.message });
+  }
+});
+
+router.post('/:voiceCallId/park', (req, res) => {
+  try {
+    parkCall(req.params.voiceCallId);
+    res.json({ ok: true });
+  } catch (e: any) {
+    const status = e.message === 'CALL_NOT_FOUND' ? 404 : 400;
+    res.status(status).json({ error: e.message });
+  }
+});
+
+router.post('/:voiceCallId/hold', (req, res) => {
+  try {
+    holdCall(req.params.voiceCallId);
+    res.json({ ok: true });
+  } catch (e: any) {
+    const status = e.message === 'CALL_NOT_FOUND' ? 404 : 400;
+    res.status(status).json({ error: e.message });
+  }
+});
+
+router.post('/:voiceCallId/resume', (req, res) => {
+  try {
+    resumeCall(req.params.voiceCallId);
+    res.json({ ok: true });
+  } catch (e: any) {
+    const status = e.message === 'CALL_NOT_FOUND' ? 404 : 400;
+    res.status(status).json({ error: e.message });
+  }
+});
 
 export default router;
+
 
 
 

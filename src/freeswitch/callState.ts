@@ -1,12 +1,18 @@
 export type CallState =
     | "CREATED"
     | "ANSWERED"
-    | "HANGUP"
-    | "TERMINATED";
+    | "COMPLETED"
+    | "FAILED"
+    | "CANCELLED";
+
 
 export interface CallRecord {
     /** Logical call UUID (variable_call_uuid) */
     callUuid: string;
+    recordingPath?: string;
+
+    /** Whether recording has been explicitly stopped */
+    recordingStopped?: boolean;
 
     /** Current lifecycle state */
     state: CallState;
@@ -30,4 +36,5 @@ export interface CallRecord {
 
     /** Optional FreeSWITCH variables */
     variables?: Record<string, string>;
+    finalOutcome?: string;
 }

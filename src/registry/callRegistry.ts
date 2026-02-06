@@ -1,5 +1,12 @@
 import { CallRecord, CallState } from "../freeswitch/callState";
 
+
+
+const CALL_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+setInterval(() => {
+  callRegistry.sweep(CALL_TTL_MS);
+}, 60 * 1000).unref();
 class CallRegistry {
   // KEY = call_uuid (variable_call_uuid)
   private calls = new Map<string, CallRecord>();
@@ -17,7 +24,7 @@ class CallRegistry {
     return this.calls.get(callUuid);
   }
 
-  
+
   /**
    * Create logical call record (A-leg only)
    */
@@ -55,11 +62,10 @@ class CallRegistry {
 
     call.state = next;
 
-    if (next === "TERMINATED") {
+    if (next === "COMPLETED" || next === "FAILED" || next === "CANCELLED") {
       call.hungupAt = Date.now();
-      console.log("🧹 [CALL CLEANUP]", callUuid);
-      this.calls.delete(callUuid);
     }
+
   }
 
   /**
@@ -123,7 +129,7 @@ class CallRegistry {
       state: call.state,
     });
 
-    call.state = "TERMINATED";
+    call.state = "FAILED";
     call.hungupAt = Date.now();
     this.calls.delete(callUuid);
   }
@@ -145,6 +151,27 @@ class CallRegistry {
     }
   }
 
+  update(
+    callUuid: string,
+    patch: Partial<CallRecord>
+  ) {
+    const call = this.calls.get(callUuid);
+    if (!call) return;
+
+    Object.assign(call, patch);
+  }
+
+  finalize(callUuid: string, outcome: CallState) {
+    this.update(callUuid, {
+      state: outcome,
+      finalOutcome: outcome, // Keeping for backward compatibility or extra metadata
+      hungupAt: Date.now(),
+    });
+  }
+
+
+
+
   /**
    * Business lookup helper
    */
@@ -154,6 +181,11 @@ class CallRegistry {
     }
     return undefined;
   }
+
+  remove(callUuid: string) {
+    this.calls.delete(callUuid);
+  }
+
 }
 
 export const callRegistry = new CallRegistry();

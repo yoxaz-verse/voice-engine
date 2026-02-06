@@ -1,18 +1,20 @@
-import dotenv from 'dotenv';
-dotenv.config(); // 🔥 MUST BE FIRST
+// src/index.ts
+import dotenv from "dotenv";
+dotenv.config();
+console.log('[INDEX] START');
+import { shutdownESL } from './freeswitch/esl';
 
+// 1️⃣ eventRouter FIRST (no listeners yet, just singleton)
+import './freeswitch/eventRouter';
 
-// 🔥 MUST COME FIRST
-import './freeswitch/esl';
-
-// 🔥 MUST COME SECOND (event listeners)
+// 2️⃣ bootstrap SECOND (registers observers)
 import './freeswitch/bootstrap';
 
-// observers AFTER bootstrap
-import './observers/logObserver';
-import './observers/callslifeCycleObserver';
+// 3️⃣ ESL THIRD (connects + emits events)
+import { connectESL } from './freeswitch/esl';
+connectESL();
 
-import './freeswitch/bootstrap';
+// 4️⃣ HTTP LAST
 import express from 'express';
 import cors from 'cors';
 import voiceRoutes from './routes/voice.routes';
@@ -32,25 +34,43 @@ app.use((req, res, next) => {
   console.log('🔥 INCOMING:', req.method, req.url);
   next();
 });
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
 
-function shutdown() {
-  console.log('[SYS] Shutting down');
-  process.exit(0);
-}
+
 
 app.use('/voice', voiceRoutes);
 
 const PORT = process.env.PORT || 3004;
 
 console.log('🔥 INDEX.TS LOADE SUCEESFULLY');
+
 console.log('[ENV]', {
   FS_HOST: process.env.FS_HOST,
   FS_PORT: process.env.FS_PORT,
   FS_PASSWORD: process.env.FS_PASSWORD,
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+function shutdown(signal: string) {
+  console.log(`\n[SYS] Received ${signal}, exiting...`);
+  try {
+    shutdownESL();
+
+    // Close server but don't wait forever if there are active connections
+    server.close();
+
+    console.log('[SYS] Goodbye!');
+    process.exit(0);
+  } catch (e) {
+    console.error('[SYS] Error during shutdown', e);
+    process.exit(1);
+  }
+}
+
+// Ensure signals are handled only once
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+
+
