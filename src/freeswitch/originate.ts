@@ -7,11 +7,13 @@ export function originateCall({
     voiceCallId,
     campaignId,
     leadId,
+    voiceAgentId,
 }: {
     phoneNumber: string;
     voiceCallId: string;
     campaignId: string;
     leadId: string;
+    voiceAgentId: string;
 }) {
     const esl = getESL();
 
@@ -25,8 +27,10 @@ export function originateCall({
         `voice_call_id=${voiceCallId}`,
         `campaign_id=${campaignId}`,
         `lead_id=${leadId}`,
-        `export_vars=call_uuid,job_uuid,voice_call_id,campaign_id,lead_id`,
+        `voice_agent_id=${voiceAgentId}`,
+        `export_vars=call_uuid,job_uuid,voice_call_id,campaign_id,lead_id,voice_agent_id`,
     ].join(",");
+
 
 
 
@@ -42,7 +46,9 @@ export function originateCall({
         voiceCallId,
         campaignId,
         leadId,
+        voiceAgentId,
     });
+
 
     return jobUuid;
 }

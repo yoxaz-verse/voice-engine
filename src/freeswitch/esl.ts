@@ -15,8 +15,8 @@ let socket: net.Socket | null = null;
 class CustomESLConnection extends EventEmitter {
     private socket: net.Socket;
     private buffer: string = "";
-    private callbacks: Record<string, (res: any) => void> = {};
     private authenticated: boolean = false;
+    private pendingCallback: ((res: any) => void) | null = null;
 
     constructor(private host: string, private port: number, private password: string) {
         super();
@@ -42,24 +42,16 @@ class CustomESLConnection extends EventEmitter {
             const rawHeaders = this.buffer.slice(0, index);
             const headers = this.parseRawHeaders(rawHeaders);
 
-            // Check for Content-Length (body follows)
             const contentLength = headers["Content-Length"] ? parseInt(headers["Content-Length"]) : 0;
 
             if (contentLength > 0) {
-                // Ensure we have the full body
-                if (this.buffer.length < index + 2 + contentLength) {
-                    // Wait for more data
-                    return;
-                }
+                if (this.buffer.length < index + 2 + contentLength) return;
 
                 const body = this.buffer.slice(index + 2, index + 2 + contentLength);
-                this.buffer = this.buffer.slice(index + 2 + contentLength); // Advance buffer
-
-                // Process message with body
+                this.buffer = this.buffer.slice(index + 2 + contentLength);
                 this.processMessage(headers, body);
             } else {
-                // No body, just headers
-                this.buffer = this.buffer.slice(index + 2); // Advance buffer
+                this.buffer = this.buffer.slice(index + 2);
                 this.processMessage(headers, "");
             }
         }
@@ -92,10 +84,12 @@ class CustomESLConnection extends EventEmitter {
                 this.emit("esl::ready");
             }
 
-            // Handle simple command callbacks (FIFO simplistic approach for now, or ignore)
-            // In a full implementation, we'd map bgapi Job-UUIDs etc. 
+            if (this.pendingCallback) {
+                const cb = this.pendingCallback;
+                this.pendingCallback = null;
+                cb({ getBody: () => replyText || body || "" });
+            }
         } else if (contentType === "text/event-plain") {
-            // Parse the inner event body (which are headers in plain mode)
             const eventHeaders = this.parseRawHeaders(body);
             const eventName = eventHeaders["Event-Name"];
 
@@ -106,7 +100,6 @@ class CustomESLConnection extends EventEmitter {
                 getHeader: (k: string) => eventHeaders[k] || ""
             };
 
-            // Emit wildcard and specific
             this.emit("esl::event::*", event);
             if (eventName) {
                 this.emit(`esl::event::${eventName}`, event);
@@ -114,20 +107,27 @@ class CustomESLConnection extends EventEmitter {
         }
     }
 
+
     public events(type: "plain" | "json", list: string, cb?: () => void) {
         this.socket.write(`event ${type} ${list}\n\n`, cb);
     }
 
     public api(command: string, cb?: (res: any) => void) {
-        // Basic send implementation
+        this.pendingCallback = cb || null;
         this.socket.write(`api ${command}\n\n`);
-        // Note: Full mapping of api responses requires a queue managed by callback not implemented here for brevity
-        // but for `bgapi originate`, we usually just fire and forget or listen for BACKGROUND_JOB
-        if (cb) {
-            // Mock response for now as we don't track command IDs in this simple client
-            // real response comes as command/reply
-            setTimeout(() => cb({ getBody: () => "+OK (Async)" }), 100).unref();
-        }
+    }
+
+    public async executeSync(command: string): Promise<string> {
+        return new Promise((resolve) => {
+            this.api(command, (res) => {
+                resolve(res.getBody());
+            });
+        });
+    }
+
+    public async exists(callUuid: string): Promise<boolean> {
+        const res = await this.executeSync(`uuid_exists ${callUuid}`);
+        return res.trim() === "true";
     }
 }
 

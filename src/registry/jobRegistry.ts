@@ -1,10 +1,12 @@
 type JobMeta = {
-    jobUuid: string;
-    voiceCallId: string;
-    campaignId: string;
-    leadId: string;
-    createdAt: number;
+  jobUuid: string;
+  voiceCallId: string;
+  campaignId: string;
+  leadId: string;
+  voiceAgentId: string;
+  createdAt: number;
 };
+
 
 class JobRegistry {
   private jobs = new Map<string, JobMeta>();

@@ -4,12 +4,14 @@ import { startRecording, stopRecording } from '../freeswitch/recording';
 import { pullRecordingFromFS } from '../freeswitch/recordingTransfer';
 import { callRegistry } from '../registry/callRegistry';
 import { jobRegistry } from '../registry/jobRegistry';
+import { transcribeAudio } from '../asr';
+
 import { CallState } from '../freeswitch/callState';
 
 /**
  * Map FreeSWITCH hangup cause to CallState
  */
-function mapHangupCause(headers: Record<string, string>): CallState {
+function mapHangupOutcome(headers: Record<string, string>): string {
     const cause = headers['Hangup-Cause'] || headers['variable_hangup_cause'];
 
     switch (cause) {
@@ -19,7 +21,9 @@ function mapHangupCause(headers: Record<string, string>): CallState {
             return 'CANCELLED';
         case 'NO_ANSWER':
         case 'NO_USER_RESPONSE':
-            return 'FAILED';
+            return 'NO_ANSWER';
+        case 'USER_BUSY':
+            return 'BUSY';
         default:
             return 'FAILED';
     }
@@ -55,7 +59,11 @@ eventRouter.on('CHANNEL_CREATE', (e) => {
     if (leg === 'A') {
         if (!callRegistry.has(callUuid)) {
             callRegistry.create(callUuid, e.headers);
-            console.log('📦 [ESL] CALL CREATED (A-LEG)', callUuid);
+            console.log('📦 [ESL] CALL CREATED', {
+                callUuid,
+                leg: 'A',
+                voiceCallId: e.headers['variable_voice_call_id'] || e.headers['variable_voiceCallId']
+            });
         }
     }
 
@@ -75,7 +83,9 @@ eventRouter.on('CHANNEL_CREATE', (e) => {
                 voiceCallId: job.voiceCallId,
                 campaignId: job.campaignId,
                 leadId: job.leadId,
+                voiceAgentId: job.voiceAgentId,
             });
+
             console.log('✅ [ESL] CALL BOUND TO JOB', { callUuid, jobUuid });
         }
     }
@@ -100,7 +110,11 @@ eventRouter.on('CHANNEL_ANSWER', (e) => {
     }
 
     callRegistry.updateState(callUuid, 'ANSWERED');
-    console.log('📞 [ESL] CALL ANSWERED', callUuid);
+    console.log('📞 [ESL] CALL ANSWERED', {
+        callUuid,
+        voiceCallId: call.voiceCallId,
+        state: 'ANSWERED'
+    });
 });
 
 /**
@@ -132,9 +146,30 @@ eventRouter.on('CHANNEL_HANGUP', (e) => {
     }
 
 
-    const finalState = mapHangupCause(e.headers);
-    callRegistry.finalize(callUuid, finalState);
-    console.log(`🏁 [ESL] CALL FINALIZED: ${finalState}`, callUuid);
+    const finalOutcome = mapHangupOutcome(e.headers);
+    // Map finalOutcome to the restricted CallState for backward compatibility/internal logic
+    const stateMapping: Record<string, CallState> = {
+        'COMPLETED': 'COMPLETED',
+        'CANCELLED': 'CANCELLED',
+        'NO_ANSWER': 'FAILED',
+        'BUSY': 'FAILED',
+        'FAILED': 'FAILED'
+    };
+    const finalState = stateMapping[finalOutcome] || 'FAILED';
+
+    callRegistry.finalize(callUuid, finalOutcome);
+    console.log(`🏁 [ESL] CALL FINALIZED: ${finalOutcome}`, { callUuid, state: finalState });
+
+    // 🚀 TRIGGER ASR (PHASE 3)
+    const finalizedCall = callRegistry.get(callUuid);
+    if (finalizedCall?.recordingPath && process.env.ASR_ENABLED === 'true') {
+        transcribeAudio({
+            callUuid,
+            voiceCallId: finalizedCall.voiceCallId || '',
+            recordingPath: finalizedCall.recordingPath
+        }).catch((err: Error) => console.error(`❌ [ASR] Failed for ${callUuid}:`, err));
+    }
+
 
     // 4️⃣ DELAYED CLEANUP (30 SECONDS)
     console.log('🧹 [ESL] SCHEDULED CLEANUP IN 30S', callUuid);

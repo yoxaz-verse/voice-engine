@@ -30,6 +30,7 @@ export interface CallRecord {
     voiceCallId?: string;
     campaignId?: string;
     leadId?: string;
+    voiceAgentId?: string;
 
     /** Loopback metadata */
     bLegUuid?: string;
@@ -37,4 +38,7 @@ export interface CallRecord {
     /** Optional FreeSWITCH variables */
     variables?: Record<string, string>;
     finalOutcome?: string;
+
+    /** Track last activity for zombie sweeper */
+    lastActivityAt?: number;
 }

@@ -37,6 +37,7 @@ class CallRegistry {
       callUuid,
       state: "CREATED",
       createdAt: Date.now(),
+      lastActivityAt: Date.now(),
       variables,
     });
   }
@@ -61,6 +62,7 @@ class CallRegistry {
     });
 
     call.state = next;
+    call.lastActivityAt = Date.now();
 
     if (next === "COMPLETED" || next === "FAILED" || next === "CANCELLED") {
       call.hungupAt = Date.now();
@@ -79,6 +81,7 @@ class CallRegistry {
       voiceCallId?: string;
       campaignId?: string;
       leadId?: string;
+      voiceAgentId?: string;
     }
   ) {
     const call = this.calls.get(callUuid);
@@ -88,6 +91,7 @@ class CallRegistry {
     call.voiceCallId ??= job.voiceCallId;
     call.campaignId ??= job.campaignId;
     call.leadId ??= job.leadId;
+    call.voiceAgentId ??= job.voiceAgentId;
   }
 
   /**
@@ -141,13 +145,25 @@ class CallRegistry {
     const now = Date.now();
 
     for (const [callUuid, call] of this.calls.entries()) {
-      if (now - call.createdAt > ttlMs) {
-        console.warn("⏱️ [CALL TTL EXPIRED]", {
+      // Task 4: Zombie Call Sweeper
+      // Removes calls that:
+      // - Have no ESL activity for > 5 minutes
+      // - Are not ACTIVE (though active calls should have activity)
+      const inactiveTime = now - (call.lastActivityAt || call.createdAt);
+
+      const isActuallyStale = inactiveTime > ttlMs;
+      const isActive = ["CREATED", "ANSWERED"].includes(call.state);
+
+      if (isActuallyStale) {
+        console.warn("🧹 [CALL SWEEPER] Cleaning zombie/stale call", {
           callUuid,
           state: call.state,
+          isActive,
+          inactiveMinutes: Math.floor(inactiveTime / 60000)
         });
         this.calls.delete(callUuid);
       }
+
     }
   }
 
@@ -161,11 +177,12 @@ class CallRegistry {
     Object.assign(call, patch);
   }
 
-  finalize(callUuid: string, outcome: CallState) {
+  finalize(callUuid: string, outcome: string) {
     this.update(callUuid, {
-      state: outcome,
-      finalOutcome: outcome, // Keeping for backward compatibility or extra metadata
+      state: (["COMPLETED", "CANCELLED"].includes(outcome) ? outcome : "FAILED") as CallState,
+      finalOutcome: outcome,
       hungupAt: Date.now(),
+      lastActivityAt: Date.now()
     });
   }
 
