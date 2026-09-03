@@ -75,6 +75,7 @@ router.get('/:voiceCallId/status', (req, res) => {
  * --------------------------------------------------
  */
 router.get('/_debug/calls', (_req, res) => {
+  if (process.env.NODE_ENV === 'production') return res.status(404).json({ error: 'Not found' });
   console.log("🌐 HTTP served by PID", process.pid);
   const calls = callRegistry.list();
   res.json({ count: calls.length, calls });
@@ -86,6 +87,7 @@ router.get('/_debug/calls', (_req, res) => {
  * --------------------------------------------------
  */
 router.get('/_debug/jobs', (_req, res) => {
+  if (process.env.NODE_ENV === 'production') return res.status(404).json({ error: 'Not found' });
   const jobs = jobRegistry.list();
 
   res.json({
@@ -198,7 +200,6 @@ router.get('/:voiceCallId/asr-status', (req, res) => {
 
 
 export default router;
-
 
 
 

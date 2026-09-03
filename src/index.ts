@@ -18,12 +18,23 @@ connectESL();
 import express from 'express';
 import cors from 'cors';
 import voiceRoutes from './routes/voice.routes';
+import { requireVoiceEngineSecret } from './middleware/serviceAuth';
 
 // startFSSocketServer(Number(process.env.FS_SOCKET_PORT)); // Only for same server
 
 const app = express();
-app.use(express.json());
-app.use(cors());
+app.disable('x-powered-by');
+app.use(express.json({ limit: '256kb' }));
+app.use(cors({
+  origin: String(process.env.ALLOWED_ORIGINS ?? '').split(',').map((value) => value.trim()).filter(Boolean),
+  credentials: false,
+}));
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
 
 app.get('/ping', (_req, res) => {
   console.log('✅ PING HIT');
@@ -37,7 +48,7 @@ app.use((req, res, next) => {
 
 
 
-app.use('/voice', voiceRoutes);
+app.use('/voice', requireVoiceEngineSecret, voiceRoutes);
 
 const PORT = process.env.PORT || 3004;
 
@@ -46,7 +57,8 @@ console.log('🔥 INDEX.TS LOADE SUCEESFULLY');
 console.log('[ENV]', {
   FS_HOST: process.env.FS_HOST,
   FS_PORT: process.env.FS_PORT,
-  FS_PASSWORD: process.env.FS_PASSWORD,
+  FS_PASSWORD_CONFIGURED: Boolean(process.env.FS_PASSWORD),
+  VOICE_ENGINE_SECRET_CONFIGURED: Boolean(process.env.VOICE_ENGINE_SECRET),
 });
 
 const server = app.listen(PORT, () => {
@@ -72,5 +84,4 @@ function shutdown(signal: string) {
 // Ensure signals are handled only once
 process.once('SIGINT', () => shutdown('SIGINT'));
 process.once('SIGTERM', () => shutdown('SIGTERM'));
-
 
